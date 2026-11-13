@@ -7,6 +7,7 @@ Webová aplikácia so živými polohami autobusov MHD Prešov (všetky linky –
 - trasa a zastávky z GTFS, oba smery vedľa seba, šípky smeru jazdy
 - oblúbené linky: hviezdička ☆ pri názve linky, zoznam pod prepínačom (uložené v prehliadači)
 - prihlásenie menom a heslom – oblúbené sa uložia na server (súbor `/app/data/users.json`, heslá ako scrypt hash)
+- inštalovateľná appka (PWA): v Chrome na Androide „Pridať na plochu“ / „Inštalovať aplikáciu“
 - klik na zastávku → odchody pre daný smer, vybraná zastávka zvýraznená
 - prepínač všetkých liniek MHD Prešov (URL `#13`, `#44`, …)
 - voliteľne HTTPS (`SSL_CERT`, `SSL_KEY`)

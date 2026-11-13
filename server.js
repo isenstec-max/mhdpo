@@ -265,7 +265,8 @@ const handler = (req, res) => {
   if (u.pathname === '/api/departures') return G ? json(res, departures(u.searchParams.get('name') || '', 14, u.searchParams.get('id') || '')) : json(res, { error: 'GTFS sa ešte načítava' }, 503);
   const f = path.join(__dirname, 'public', u.pathname === '/' ? 'index.html' : path.basename(u.pathname));
   fs.readFile(f, (e, b) => { if (e) { res.writeHead(404); return res.end(); }
-    res.writeHead(200, { 'Content-Type': f.endsWith('.html') ? 'text/html; charset=utf-8' : 'application/octet-stream' }); res.end(b); });
+    const ct = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json' }[path.extname(f)] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'no-cache' }); res.end(b); });
 };
 (useTLS ? https.createServer({ cert: fs.readFileSync(SSL_CERT), key: fs.readFileSync(SSL_KEY) }, handler) : http.createServer(handler))
   .listen(PORT, () => console.log('MHD ' + (useTLS ? 'HTTPS' : 'HTTP') + ' na porte', PORT, 'linky', LINES.join(',')));
