@@ -61,9 +61,15 @@ li.dr .ln{min-width:0}
 .lines button.on{background:var(--d1);color:#fff}
 .dep-h{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #liveSt{font-weight:600;color:var(--acc)}
+.favs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;font-size:13px}
+.favs .favl{font-weight:700;color:#e0a800}
+.favs button{min-width:40px;padding:5px 8px;border-radius:8px;border:2px solid #e0a800;background:transparent;color:var(--ink);font:800 14px/1 system-ui,sans-serif;cursor:pointer}
+.favs button.on{background:#e0a800;color:#16211c}
+button.star{border:0;background:none;padding:0 4px;font-size:24px;line-height:1;color:#e0a800;cursor:pointer;vertical-align:-2px}
 </style></head><body><main>
 <div class="lines" id="lineSel" role="tablist" aria-label="Výber linky"></div>
-<h1><span class="badge" id="lnBadge">13</span>Všetky autobusy linky <span id="lnTxt">13</span> <small id="ver" style="font-size:12px;font-weight:600;color:var(--mut)">v2.1.0</small></h1>
+<div class="favs" id="favSel"></div>
+<h1><span class="badge" id="lnBadge">13</span>Všetky autobusy linky <span id="lnTxt">13</span><button id="favBtn" class="star" aria-pressed="false" title="Obl'ubene">&#9734;</button> <small id="ver" style="font-size:12px;font-weight:600;color:var(--mut)">v2.1.0</small></h1>
 <div class="legend" style="margin-bottom:10px"><span><i style="background:var(--d1)"></i>smer <span id="dest1">Čierny most</span></span><span><i style="background:var(--d0)"></i>smer <span id="dest0">Podhradík</span></span><span><b style="color:#e03131">−1:30</b> mešká (min:sek) · <b style="color:#2f9e44">+0:20</b> načas/v predstihu</span><span>špička krúžku = smer jazdy, v krúžku číslo linky · šípky v trase = smer jazdy · detaily: prejdi myšou / ťukni</span><span>Klikni na zastávku → odchody vpravo</span></div>
 <div class="wrap">
  <div class="card">
@@ -137,7 +143,7 @@ const headT=h=>String(h||'').toLowerCase().replace(/(^|[\s\-–(/.])(\p{L})/gu,(
 let lineReq=0;
 function switchLine(ln){LN=ln;const my=++lineReq;try{localStorage.setItem('mhdLine',ln)}catch(e){}history.replaceState(null,'','#'+ln);
  document.querySelectorAll('#lineSel button').forEach(b=>{const on=b.dataset.l===ln;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
- document.getElementById('lnBadge').textContent=ln;document.getElementById('lnTxt').textContent=ln;
+ updStar();renderFav();document.getElementById('lnBadge').textContent=ln;document.getElementById('lnTxt').textContent=ln;
  for(const k in ST){delete ST[k]}live.clearLayers();document.getElementById('liveList').innerHTML='';document.getElementById('liveSt').textContent='Živé GPS: načítavam…';
  curStop=null;selM=null;selStop(null);clearInterval(depTimer);document.getElementById('dep').innerHTML='<h2>Odchody</h2><p class="mut" style="margin:4px 0 0">Klikni na zastávku linky '+ln+' (krúžok – farba podľa smeru) v mape.</p>';
  DEST=ln==='13'?{1:'Čierny most',0:'Podhradík'}:{1:'…',0:'…'};setDest();
@@ -146,6 +152,12 @@ function switchLine(ln){LN=ln;const my=++lineReq;try{localStorage.setItem('mhdLi
  fetch('api/line/'+ln).then(r=>r.ok?r.json():Promise.reject()).then(d=>{if(my!==lineReq)return;if(d.shapes&&d.stops&&d.stops.length){if(d.dest&&ln!=='13')DEST={0:headT(d.dest[0])||'smer 0',1:headT(d.dest[1])||'smer 1'};setDest();drawLine(d);document.getElementById('gtfsInfo').textContent='trasa a CP z aktuálneho GTFS'}else document.getElementById('gtfsInfo').textContent='trasa linky '+ln+' nie je v GTFS'}).catch(()=>{if(my===lineReq)document.getElementById('gtfsInfo').textContent=ln==='13'?'trasa z uloženej kópie GTFS':'trasu sa nepodarilo načítať'});
  poll()}
 function setDest(){document.getElementById('dest1').textContent=DEST[1];document.getElementById('dest0').textContent=DEST[0]}
+// oblubene linky (ulozene v prehliadaci)
+let FAV=[];try{FAV=JSON.parse(localStorage.getItem('mhdFav')||'[]').filter(x=>/^[A-Z0-9]{1,4}$/.test(x))}catch(e){}
+function renderFav(){document.getElementById('favSel').innerHTML='<span class="favl">★ Obľúbené:</span>'+(FAV.length?FAV.map(l=>'<button data-l="'+l+'"'+(l===LN?' class="on"':'')+'>'+l+'</button>').join(''):'<span class="mut">pridaj linku hviezdičkou ☆ pri názve linky</span>')}
+function updStar(){const b=document.getElementById('favBtn'),on=FAV.includes(LN);b.textContent=on?'★':'☆';b.setAttribute('aria-pressed',on);b.title=on?'Odobrať z obľúbených':'Pridať do obľúbených'}
+document.getElementById('favBtn').onclick=()=>{const i=FAV.indexOf(LN);if(i<0)FAV.push(LN);else FAV.splice(i,1);try{localStorage.setItem('mhdFav',JSON.stringify(FAV))}catch(e){}updStar();renderFav()};
+document.getElementById('favSel').onclick=e=>{const b=e.target.closest('button');if(b&&b.dataset.l!==LN)switchLine(b.dataset.l)};
 function renderSel(){document.getElementById('lineSel').innerHTML=LINES.map(l=>'<button data-l="'+l+'" role="tab"'+(l===LN?' class="on" aria-selected="true"':'')+'>'+l+'</button>').join('')}renderSel();
 fetch('api/lines').then(r=>r.json()).then(a=>{if(Array.isArray(a)&&a.length){LINES=a;if(!LINES.includes(LN))LINES.push(LN);renderSel()}}).catch(()=>{});
 document.getElementById('lineSel').onclick=e=>{const b=e.target.closest('button');if(b&&b.dataset.l!==LN)switchLine(b.dataset.l)};
