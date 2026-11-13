@@ -5,6 +5,7 @@ Webová aplikácia so živými polohami autobusov MHD Prešov (všetky linky –
 ## Funkcie
 - polohy autobusov z mhdpo.sk (WebSocket), meškanie v m:ss, blikajúca ikonka pri neaktuálnom GPS
 - trasa a zastávky z GTFS, oba smery vedľa seba, šípky smeru jazdy
+- oblúbené linky: hviezdička ☆ pri názve linky, zoznam pod prepínačom (uložené v prehliadači)
 - klik na zastávku → odchody pre daný smer, vybraná zastávka zvýraznená
 - prepínač všetkých liniek MHD Prešov (URL `#13`, `#44`, …)
 - voliteľne HTTPS (`SSL_CERT`, `SSL_KEY`)
