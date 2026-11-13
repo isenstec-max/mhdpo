@@ -1,12 +1,12 @@
 # MHD Prešov – živé polohy autobusov
 
-Webová aplikácia so živými polohami autobusov MHD Prešov (linky 1, 13, 21, 28, 37, N2) na mape OpenStreetMap.
+Webová aplikácia so živými polohami autobusov MHD Prešov (všetky linky – zoznam z GTFS) na mape OpenStreetMap.
 
 ## Funkcie
 - polohy autobusov z mhdpo.sk (WebSocket), meškanie v m:ss, blikajúca ikonka pri neaktuálnom GPS
 - trasa a zastávky z GTFS, oba smery vedľa seba, šípky smeru jazdy
 - klik na zastávku → odchody pre daný smer, vybraná zastávka zvýraznená
-- prepínač liniek (URL `#13`, `#21`, …)
+- prepínač všetkých liniek MHD Prešov (URL `#13`, `#44`, …)
 - voliteľne HTTPS (`SSL_CERT`, `SSL_KEY`)
 
 ## Spustenie (Docker)

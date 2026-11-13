@@ -31,11 +31,17 @@ function watch(line, direction) {
       try { for (const b of m.data || []) vote(line, direction, b); } catch {}
     }
   });
-  ws.on('close', () => setTimeout(() => watch(line, direction), 5000));
+  socks[key] = ws;
+  ws.on('close', () => { if (watched.has(line)) setTimeout(() => { if (watched.has(line)) watch(line, direction); }, 5000); });
   ws.on('error', e => console.log('WS', key, e.message));
 }
 const watched = new Set();
-function ensureWatch(l) { if (watched.has(l) || watched.size >= 20 || !/^[A-Z]?\d{1,3}$/.test(l)) return; watched.add(l); [0, 1].forEach(d => watch(l, d)); }
+const socks = {}, lastReq = {};
+function ensureWatch(l) { lastReq[l] = Date.now(); if (watched.has(l) || watched.size >= 80 || !/^[A-Z0-9]{1,4}$/.test(l)) return; watched.add(l); [0, 1].forEach(d => watch(l, d)); }
+// linky mimo predvolenych sledujeme len kym ich niekto pozera (30 min od poslednej poziadavky)
+setInterval(() => { const now = Date.now(); for (const l of [...watched]) if (!LINES.includes(l) && now - (lastReq[l] || 0) > 30 * 60 * 1000) { watched.delete(l); [0, 1].forEach(d => { const w = socks[`${l}:${d}`]; if (w) try { w.close(); } catch {} }); } }, 5 * 60 * 1000);
+// zoznam vsetkych liniek z GTFS: cisla, potom nocne N, potom pismenove
+function linesList() { const k = x => /^\d/.test(x) ? [0, parseInt(x), x] : /^N\d/.test(x) ? [1, parseInt(x.slice(1)), x] : [2, 0, x]; return [...new Set(Object.values(G.trips).map(t => t.route))].sort((a, b) => { const A = k(a), B = k(b); return A[0] - B[0] || A[1] - B[1] || (A[2] < B[2] ? -1 : A[2] > B[2] ? 1 : 0); }); }
 LINES.forEach(ensureWatch);
 
 // ---------- GTFS ----------
@@ -208,6 +214,7 @@ const handler = (req, res) => {
   if ((m = u.pathname.match(/^\/api\/line\/(\w+)/))) return G ? json(res, lineInfo(m[1])) : json(res, { error: 'GTFS sa ešte načítava' }, 503);
   if (u.pathname === '/api/dirmap') return json(res, Object.fromEntries([...watched].map(l => [l, { flipped: flipped(l), votes: votes[l] || null }])));
   if (u.pathname === '/api/version') return json(res, { version: VERSION });
+  if (u.pathname === '/api/lines') return json(res, G ? linesList() : LINES);
   if (u.pathname === '/api/departures') return G ? json(res, departures(u.searchParams.get('name') || '', 14, u.searchParams.get('id') || '')) : json(res, { error: 'GTFS sa ešte načítava' }, 503);
   const f = path.join(__dirname, 'public', u.pathname === '/' ? 'index.html' : path.basename(u.pathname));
   fs.readFile(f, (e, b) => { if (e) { res.writeHead(404); return res.end(); }
