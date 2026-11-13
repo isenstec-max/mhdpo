@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="sk"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b6e4f">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
 <title>MHD Prešov – živé polohy autobusov</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -261,4 +266,5 @@ function openStop(name,id,dir){curStop=name;curId=id||null;curDir=(dir===0||dir=
  if(window.innerWidth<=900)document.getElementById('dep').scrollIntoView({behavior:'smooth'})}
 switchLine(LN);
 renderAcc();if(TOK)api('fav').then(setSess).catch(e=>{if(e.s===401)dropSess()});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script></body></html>
