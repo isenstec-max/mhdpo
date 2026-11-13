@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="sk"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MHD Prešov – živé polohy autobusov</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#f4f5f2;--card:#fff;--ink:#16211c;--mut:#5d6b64;--d1:#0b6e4f;--d0:#1c7ed6;--b1:#3cc48f;--b0:#6db6f5;--acc:#d9480f;--rule:#dfe3de}
+@media(prefers-color-scheme:dark){:root{--bg:#101513;--card:#182019;--ink:#e8eee9;--mut:#93a39a;--rule:#28332d}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1400px;margin:0 auto;padding:14px}
+h1{font-size:20px;margin:0 0 4px}
+.badge{display:inline-block;background:var(--d1);color:#fff;font-weight:700;border-radius:6px;padding:1px 8px;margin-right:6px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:12px;margin-bottom:12px}
+.wrap{display:grid;grid-template-columns:1fr 360px;gap:12px;align-items:start}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+#map{height:72vh;min-height:380px;border-radius:10px;background:var(--bg)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+button{font:inherit;border-radius:8px;padding:7px 12px;font-weight:600;border:1px solid var(--rule);background:var(--card);color:var(--ink);cursor:pointer}
+button.on{background:var(--d1);color:#fff;border-color:var(--d1)}
+button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+small,.mut{color:var(--mut)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--mut)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:5px;vertical-align:-1px;border:2px solid #fff;box-shadow:0 0 0 1px #0003}
+ol{list-style:none;margin:6px 0 0;padding:0}
+li{display:flex;gap:10px;padding:6px 4px;border-bottom:1px solid var(--rule);font-variant-numeric:tabular-nums;align-items:baseline}
+li:last-child{border:0}
+.num{font:500 11px ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+/* autobus: krúžok so špičkou v smere jazdy + číslo vozidla v krúžku */
+.bus{position:relative;width:0;height:0}
+.pin{position:absolute;left:-22px;top:-22px;width:44px;height:44px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+.pin svg{width:44px;height:44px;display:block}
+@keyframes blk{0%,100%{opacity:1}50%{opacity:.15}}
+.bus.est .pin{animation:blk 1s ease-in-out infinite}
+.arr{position:relative;width:0;height:0}
+.arr svg{position:absolute;left:-10px;top:-10px;width:20px;height:20px}
+.leaflet-tooltip.stl{background:rgba(255,255,255,.85);border:0;box-shadow:none;padding:0 4px;font:600 11px/1.3 system-ui,sans-serif;color:#16211c}
+.leaflet-tooltip.stl:before{display:none}
+.nolbl .leaflet-tooltip.stl{display:none}
+.noarr .arr{display:none}
+.arrS .arr svg{left:-6px;top:-6px;width:12px;height:12px}
+.arrM .arr svg{left:-8px;top:-8px;width:16px;height:16px}
+.pin b{position:absolute;inset:0;display:grid;place-items:center;font:800 12px/1 system-ui,sans-serif;color:#16211c;letter-spacing:-.4px}
+.lbl{position:absolute;left:24px;top:-14px;white-space:nowrap;background:rgba(255,255,255,.94);color:#16211c;border-radius:6px;padding:2px 6px;font:12px/1.3 system-ui,sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.3);border-left:4px solid}
+.c1{color:var(--b1);border-color:var(--b1)}.c0{color:var(--b0);border-color:var(--b0)}
+.leaflet-div-icon{background:none;border:0}
+.dly{display:inline-block;border-radius:5px;padding:0 5px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums}
+.lbl2{position:absolute;left:21px;top:-10px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.35);font-size:12px;line-height:18px}
+.dly-late{background:#e03131}.dly-ok{background:#2f9e44}
+/* odchody */
+#dep h2{font-size:17px;margin:0 0 2px}
+.ln{display:inline-block;min-width:30px;text-align:center;border-radius:5px;padding:0 5px;font-weight:700;background:#e9ecef;color:#16211c}
+.ln.l13{background:var(--d1);color:#fff}
+.dirh{display:table;margin:2px 0 4px;padding:2px 8px;border-radius:6px;color:#fff;font-weight:700;font-size:14px}.c1h{background:var(--d1)}.ln.l13b{background:var(--d0)}.c0h{background:var(--d0)}
+.dep-t{font-weight:700}
+.dep-in{color:var(--mut);white-space:nowrap;text-align:right}
+li.dr{display:grid!important;grid-template-columns:44px 38px minmax(0,1fr) 78px;gap:8px;align-items:center}
+li.dr .ln{min-width:0}
+.lines{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}
+.lines button{min-width:48px;padding:6px 12px;border-radius:8px;border:2px solid var(--d1);background:transparent;color:var(--ink);font:800 16px/1 system-ui,sans-serif;cursor:pointer}
+.lines button.on{background:var(--d1);color:#fff}
+.dep-h{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#liveSt{font-weight:600;color:var(--acc)}
+</style></head><body><main>
+<div class="lines" id="lineSel" role="tablist" aria-label="Výber linky"></div>
+<h1><span class="badge" id="lnBadge">13</span>Všetky autobusy linky <span id="lnTxt">13</span> <small id="ver" style="font-size:12px;font-weight:600;color:var(--mut)">v2.1.0</small></h1>
+<div class="legend" style="margin-bottom:10px"><span><i style="background:var(--d1)"></i>smer <span id="dest1">Čierny most</span></span><span><i style="background:var(--d0)"></i>smer <span id="dest0">Podhradík</span></span><span><b style="color:#e03131">−1:30</b> mešká (min:sek) · <b style="color:#2f9e44">+0:20</b> načas/v predstihu</span><span>špička krúžku = smer jazdy, v krúžku číslo linky · šípky v trase = smer jazdy · detaily: prejdi myšou / ťukni</span><span>Klikni na zastávku → odchody vpravo</span></div>
+<div class="wrap">
+ <div class="card">
+  <div class="bar">
+   <button id="osmBtn" class="on" aria-pressed="true">🗺️ OpenStreetMap: zapnutá</button>
+   <button id="fitBtn">Celá trasa</button>
+   <small id="gtfsInfo"></small>
+  </div>
+  <div id="map" role="application" aria-label="Mapa linky"></div>
+ </div>
+ <aside class="card" id="dep" aria-live="polite">
+  <h2>Odchody</h2><p class="mut" style="margin:4px 0 0">Klikni na zastávku (krúžok – farba podľa smeru) v mape.</p>
+ </aside>
+</div>
+<div class="card"><div id="liveSt">Živé GPS: načítavam…</div><ol id="liveList"></ol></div>
+<small>Cestovný poriadok a trasy: GTFS – MHD Prešov (DPMP / mesto Prešov, CC BY 4.0). Mapa © prispievatelia OpenStreetMap. Polohy: mhdpo.sk.</small>
+</main>
+<script>
+const FALLBACK={"shapes":{"0":[[[48.99144,21.24547],[48.9909,21.2459],[48.99051,21.24622],[48.99017,21.2465],[48.99,21.24661],[48.98972,21.24682],[48.98928,21.24713],[48.98892,21.24738],[48.98866,21.24756],[48.98856,21.24762],[48.98851,21.24766],[48.9885,21.24777],[48.9886,21.24805],[48.98871,21.24825],[48.98894,21.24851],[48.98923,21.24878],[48.98947,21.24905],[48.98972,21.24944],[48.98988,21.24977],[48.98998,21.25002],[48.99011,21.25046],[48.99025,21.25103],[48.99034,21.25144],[48.9904,21.25171],[48.99054,21.25228],[48.99068,21.25292],[48.9909,21.25395],[48.99097,21.2543],[48.99108,21.25483],[48.99113,21.25517],[48.9912,21.25567],[48.99126,21.25611],[48.99135,21.25695],[48.99139,21.2577],[48.99142,21.25853],[48.99144,21.25924],[48.99144,21.25991],[48.99137,21.26043],[48.99139,21.261],[48.99128,21.26242],[48.99121,21.26332],[48.99115,21.26375],[48.99099,21.26457],[48.99086,21.26509],[48.99079,21.26545],[48.99076,21.26561],[48.99072,21.26583],[48.99083,21.26588],[48.99102,21.26594],[48.99149,21.26614],[48.99203,21.26641],[48.99229,21.26655],[48.99244,21.26664],[48.99279,21.26688],[48.99327,21.26725],[48.99374,21.26763],[48.99393,21.26787],[48.99424,21.26814],[48.99477,21.2685],[48.99562,21.26915],[48.99584,21.2693],[48.99623,21.26954],[48.99664,21.26972],[48.99696,21.26986],[48.99729,21.26994],[48.99755,21.26997],[48.9981,21.27003],[48.99844,21.27004],[48.99896,21.27],[48.99943,21.26988],[48.99988,21.26971],[49.00078,21.26916],[49.00188,21.26836],[49.00368,21.267],[49.00477,21.26617],[49.00554,21.26565],[49.00587,21.26549],[49.00616,21.26537],[49.00652,21.26527],[49.00705,21.26522],[49.00743,21.26524],[49.00834,21.26545],[49.009,21.26567],[49.01025,21.26608],[49.01093,21.26631],[49.01121,21.26641],[49.01151,21.26657],[49.01164,21.26685],[49.01162,21.26741],[49.01165,21.26767],[49.01169,21.26789],[49.01173,21.26822],[49.01175,21.26845],[49.01176,21.26882],[49.01177,21.26998],[49.01178,21.27025],[49.01178,21.27046],[49.01178,21.2722],[49.01173,21.27357],[49.01171,21.27406],[49.01168,21.27433],[49.01166,21.27456],[49.0117,21.27493],[49.01176,21.27506],[49.01186,21.27558],[49.0119,21.27596],[49.01195,21.27653],[49.012,21.27809],[49.01206,21.27919],[49.0121,21.27964],[49.01231,21.28029],[49.01264,21.28114],[49.01312,21.28078],[49.01319,21.28014],[49.0134,21.27712],[49.01344,21.27636],[49.01436,21.27664],[49.0153,21.27689],[49.01638,21.27712],[49.01739,21.27735],[49.0179,21.27746],[49.018,21.27633],[49.01807,21.27607],[49.01811,21.27597],[49.01826,21.27612],[49.01842,21.27623],[49.01867,21.27635],[49.01912,21.27652],[49.01948,21.27666],[49.02037,21.27701],[49.0207,21.27714],[49.02112,21.27731],[49.0213,21.27738],[49.02137,21.27739],[49.02142,21.27738],[49.02149,21.27733],[49.02158,21.27727],[49.02165,21.2774],[49.02192,21.27807],[49.02209,21.27849],[49.02219,21.27873],[49.02245,21.27933],[49.02266,21.27985],[49.02288,21.28037],[49.02315,21.28107],[49.02391,21.28297],[49.02451,21.28449],[49.02484,21.28535],[49.0248,21.2861],[49.02478,21.28647],[49.02239,21.28629],[49.02134,21.28798],[49.01992,21.29028],[49.01942,21.29165],[49.01925,21.2936],[49.01887,21.29902],[49.0185,21.30452],[49.01857,21.30525],[49.01985,21.31076],[49.01984,21.31168],[49.01953,21.31301],[49.01878,21.31635],[49.01743,21.31625],[49.01743,21.31702],[49.01743,21.31722],[49.01741,21.31779],[49.01737,21.31845],[49.0173,21.31914],[49.01724,21.31939],[49.01717,21.31962],[49.0169,21.32014],[49.01681,21.32038],[49.01677,21.32051],[49.01668,21.32084],[49.01801,21.32137],[49.01979,21.32175],[49.02024,21.32237],[49.02034,21.3225],[49.02198,21.32394],[49.0229,21.32498],[49.02355,21.32581],[49.0238,21.32636],[49.02367,21.32689],[49.02343,21.32768],[49.02308,21.3282],[49.02302,21.32858],[49.02308,21.3288],[49.0232,21.32896],[49.02338,21.32902],[49.02368,21.32903],[49.0238,21.32908],[49.02395,21.32925],[49.02403,21.32942],[49.02417,21.3298],[49.02439,21.33039],[49.02446,21.33062],[49.02455,21.33102],[49.02484,21.33286],[49.02488,21.33304],[49.02494,21.3336],[49.02493,21.33389],[49.02486,21.33448],[49.02446,21.33547],[49.02423,21.33642],[49.02417,21.33672],[49.02414,21.33682]],[[48.99144,21.24547],[48.9909,21.2459],[48.99051,21.24622],[48.99017,21.2465],[48.99,21.24661],[48.98972,21.24682],[48.98928,21.24713],[48.98892,21.24738],[48.98866,21.24756],[48.98856,21.24762],[48.98851,21.24766],[48.9885,21.24777],[48.9886,21.24805],[48.98871,21.24825],[48.98894,21.24851],[48.98923,21.24878],[48.98947,21.24905],[48.98972,21.24944],[48.98988,21.24977],[48.98998,21.25002],[48.99011,21.25046],[48.99025,21.25103],[48.99034,21.25144],[48.9904,21.25171],[48.99054,21.25228],[48.99068,21.25292],[48.9909,21.25395],[48.99097,21.2543],[48.99108,21.25483],[48.99113,21.25517],[48.9912,21.25567],[48.99126,21.25611],[48.99135,21.25695],[48.99139,21.2577],[48.99142,21.25853],[48.99144,21.25924],[48.99144,21.25991],[48.99137,21.26043],[48.99139,21.261],[48.99128,21.26242],[48.99121,21.26332],[48.99115,21.26375],[48.99099,21.26457],[48.99086,21.26509],[48.99079,21.26545],[48.99076,21.26561],[48.99072,21.26583],[48.99083,21.26588],[48.99102,21.26594],[48.99149,21.26614],[48.99203,21.26641],[48.99229,21.26655],[48.99244,21.26664],[48.99279,21.26688],[48.99327,21.26725],[48.99374,21.26763],[48.99393,21.26787],[48.99424,21.26814],[48.99477,21.2685],[48.99562,21.26915],[48.99584,21.2693],[48.99623,21.26954],[48.99664,21.26972],[48.99696,21.26986],[48.99729,21.26994],[48.99755,21.26997],[48.9981,21.27003],[48.99844,21.27004],[48.99896,21.27],[48.99943,21.26988],[48.99988,21.26971],[49.00078,21.26916],[49.00188,21.26836],[49.00368,21.267],[49.00477,21.26617],[49.00554,21.26565],[49.00587,21.26549],[49.00616,21.26537],[49.00652,21.26527],[49.00705,21.26522],[49.00743,21.26524],[49.00834,21.26545],[49.009,21.26567],[49.01025,21.26608],[49.01093,21.26631],[49.01121,21.26641],[49.01151,21.26657],[49.01164,21.26685],[49.01162,21.26741],[49.01165,21.26767],[49.01169,21.26789],[49.01173,21.26822],[49.01175,21.26845],[49.01176,21.26882],[49.01177,21.26998],[49.01178,21.27025],[49.01178,21.27046],[49.01178,21.2722],[49.01173,21.27357],[49.01171,21.27406],[49.01168,21.27433],[49.01166,21.27456],[49.0117,21.27493],[49.01176,21.27506],[49.01186,21.27558],[49.0119,21.27596],[49.01195,21.27653],[49.012,21.27809],[49.01206,21.27919],[49.0121,21.27964],[49.01231,21.28029],[49.01264,21.28114],[49.01312,21.28078],[49.01319,21.28014],[49.0134,21.27712],[49.01344,21.27636],[49.01436,21.27664],[49.0153,21.27689],[49.01638,21.27712],[49.01739,21.27735],[49.0179,21.27746],[49.018,21.27633],[49.01807,21.27607],[49.01811,21.27597],[49.01826,21.27612],[49.01842,21.27623],[49.01867,21.27635],[49.01912,21.27652],[49.01948,21.27666],[49.02037,21.27701],[49.0207,21.27714],[49.02112,21.27731],[49.0213,21.27738],[49.02137,21.27739],[49.02142,21.27738],[49.02149,21.27733],[49.02158,21.27727],[49.02165,21.2774],[49.02192,21.27807],[49.02209,21.27849],[49.02219,21.27873],[49.02245,21.27933],[49.02266,21.27985],[49.02288,21.28037],[49.02315,21.28107],[49.02391,21.28297],[49.02451,21.28449],[49.02484,21.28535],[49.0248,21.2861],[49.02478,21.28647],[49.02239,21.28629],[49.02134,21.28798],[49.01992,21.29028],[49.01942,21.29165],[49.01925,21.2936],[49.01887,21.29902],[49.0185,21.30452],[49.01857,21.30525],[49.01985,21.31076],[49.01984,21.31168],[49.01953,21.31301],[49.01878,21.31635],[49.01743,21.31625],[49.01743,21.31702],[49.01743,21.31722],[49.01741,21.31779],[49.01737,21.31845],[49.0173,21.31914],[49.01724,21.31939],[49.01717,21.31962],[49.0169,21.32014],[49.01681,21.32038],[49.01677,21.32053],[49.01669,21.32088],[49.01633,21.32186],[49.01594,21.32317],[49.0158,21.32362],[49.01557,21.32444],[49.01548,21.32464],[49.01539,21.3248],[49.01515,21.32521],[49.01502,21.32547],[49.0149,21.32574],[49.01482,21.32595],[49.01474,21.32615],[49.01467,21.32629],[49.01453,21.32652],[49.01441,21.32669],[49.01395,21.32718],[49.01365,21.32751],[49.01345,21.32776],[49.01332,21.32807],[49.01322,21.32847],[49.01314,21.32864],[49.01302,21.32874],[49.01286,21.32881],[49.01259,21.32905],[49.01247,21.32925],[49.01236,21.32962],[49.01224,21.32994],[49.01213,21.33027],[49.01207,21.33054],[49.01201,21.33087],[49.01197,21.3311],[49.01194,21.3318],[49.01101,21.3335],[49.01062,21.33421],[49.00971,21.33614],[49.0092,21.33682],[49.00849,21.33754],[49.00793,21.33815],[49.00753,21.33867],[49.00674,21.34076],[49.00636,21.34223],[49.00563,21.34389],[49.00513,21.34486],[49.00502,21.34507],[49.00445,21.3464],[49.00377,21.34733],[49.00357,21.34864]]],"1":[[[49.0036,21.34868],[49.00379,21.34742],[49.00441,21.34656],[49.00505,21.34514],[49.00529,21.34465],[49.00644,21.34207],[49.00677,21.34076],[49.00759,21.33864],[49.00951,21.33654],[49.01076,21.33403],[49.01099,21.3336],[49.01194,21.33181],[49.012,21.33105],[49.01207,21.33054],[49.0124,21.3295],[49.01255,21.32911],[49.01271,21.32895],[49.01295,21.32878],[49.01317,21.32865],[49.01337,21.32787],[49.01373,21.32748],[49.01397,21.3272],[49.01429,21.32685],[49.01453,21.32652],[49.01464,21.32635],[49.01477,21.32609],[49.0149,21.32574],[49.01502,21.32547],[49.01515,21.32521],[49.01539,21.3248],[49.01553,21.32455],[49.01574,21.32387],[49.01594,21.32317],[49.01633,21.32186],[49.01669,21.32088],[49.01677,21.32053],[49.01681,21.32038],[49.01702,21.31993],[49.01717,21.31962],[49.01724,21.31939],[49.0173,21.31914],[49.01733,21.31898],[49.01737,21.31845],[49.01743,21.31757],[49.01746,21.31717],[49.01746,21.31625],[49.01882,21.31642],[49.01992,21.3117],[49.01989,21.31057],[49.01867,21.30527],[49.01858,21.30441],[49.01931,21.29352],[49.01946,21.2918],[49.01987,21.29059],[49.02128,21.28819],[49.02156,21.28768],[49.02242,21.28634],[49.02476,21.28655],[49.0249,21.28658],[49.02501,21.28658],[49.02514,21.28644],[49.0252,21.28622],[49.02487,21.28536],[49.02453,21.28449],[49.0238,21.28257],[49.02356,21.28208],[49.02319,21.28114],[49.02303,21.28075],[49.02245,21.27933],[49.02219,21.27873],[49.02209,21.27849],[49.02192,21.27807],[49.02165,21.2774],[49.0216,21.27726],[49.02149,21.27732],[49.02142,21.27736],[49.02135,21.27738],[49.02112,21.27731],[49.02088,21.27722],[49.0207,21.27714],[49.02058,21.27708],[49.02038,21.27699],[49.02017,21.27693],[49.01962,21.27671],[49.01948,21.27666],[49.01912,21.27652],[49.01867,21.27635],[49.01842,21.27623],[49.01826,21.27612],[49.01811,21.27597],[49.01789,21.27565],[49.01785,21.27558],[49.01773,21.27534],[49.01736,21.27442],[49.01709,21.27373],[49.01682,21.27305],[49.01623,21.27156],[49.01512,21.27129],[49.01477,21.27119],[49.01363,21.27091],[49.01292,21.27067],[49.01235,21.2705],[49.01179,21.27045],[49.01178,21.2695],[49.01177,21.26848],[49.01166,21.26764],[49.01164,21.26747],[49.01163,21.26734],[49.01164,21.2672],[49.01167,21.26707],[49.01175,21.26674],[49.01173,21.26654],[49.01161,21.26631],[49.0114,21.26623],[49.01026,21.26591],[49.00929,21.2656],[49.00832,21.26529],[49.00785,21.26516],[49.00755,21.2651],[49.00682,21.26508],[49.00664,21.2651],[49.00597,21.26527],[49.00557,21.26546],[49.00516,21.26572],[49.00435,21.26629],[49.00293,21.26736],[49.00195,21.26812],[49.00098,21.26883],[49.00017,21.2694],[48.99966,21.26965],[48.99884,21.26987],[48.99809,21.26988],[48.99726,21.26978],[48.99679,21.26963],[48.99642,21.26941],[48.99602,21.26921],[48.99543,21.26884],[48.99496,21.26846],[48.99454,21.26812],[48.99428,21.26785],[48.99392,21.26741],[48.99369,21.26738],[48.99276,21.26667],[48.99247,21.26646],[48.99206,21.26622],[48.99154,21.26596],[48.99117,21.26567],[48.99105,21.26555],[48.991,21.26537],[48.99099,21.26516],[48.99114,21.26415],[48.9913,21.26312],[48.99135,21.26259],[48.99133,21.26228],[48.99146,21.26048],[48.99146,21.25833],[48.99135,21.25671],[48.99111,21.2549],[48.99084,21.25338],[48.99006,21.25014],[48.98949,21.24902],[48.98863,21.24806],[48.98855,21.24764],[48.98958,21.24692],[48.98976,21.24682],[48.9904,21.24637],[48.99067,21.24713],[48.99092,21.24778],[48.99118,21.24848],[48.9918,21.24807],[48.99207,21.24789],[48.99256,21.24757],[48.99276,21.24743],[48.9924,21.24616]],[[49.0036,21.34868],[49.00379,21.34742],[49.00441,21.34656],[49.00505,21.34514],[49.00529,21.34465],[49.00644,21.34207],[49.00677,21.34076],[49.00759,21.33864],[49.00951,21.33654],[49.01076,21.33403],[49.01099,21.3336],[49.01194,21.33181],[49.012,21.33105],[49.01207,21.33054],[49.0124,21.3295],[49.01255,21.32911],[49.01271,21.32895],[49.01295,21.32878],[49.01317,21.32865],[49.01337,21.32787],[49.01373,21.32748],[49.01397,21.3272],[49.01429,21.32685],[49.01453,21.32652],[49.01464,21.32635],[49.01477,21.32609],[49.0149,21.32574],[49.01502,21.32547],[49.01515,21.32521],[49.01539,21.3248],[49.01553,21.32455],[49.01574,21.32387],[49.01594,21.32317],[49.01633,21.32186],[49.01669,21.32088],[49.01677,21.32053],[49.01681,21.32038],[49.01702,21.31993],[49.01717,21.31962],[49.01724,21.31939],[49.0173,21.31914],[49.01733,21.31898],[49.01737,21.31845],[49.01743,21.31757],[49.01746,21.31717],[49.01746,21.31625],[49.01882,21.31642],[49.01992,21.3117],[49.01989,21.31057],[49.01867,21.30527],[49.01858,21.30441],[49.01931,21.29352],[49.01946,21.2918],[49.01987,21.29059],[49.02128,21.28819],[49.02156,21.28768],[49.02242,21.28634],[49.02476,21.28655],[49.0249,21.28658],[49.02501,21.28658],[49.02514,21.28644],[49.0252,21.28622],[49.02487,21.28536],[49.02453,21.28449],[49.0238,21.28257],[49.02356,21.28208],[49.02319,21.28114],[49.02303,21.28075],[49.02245,21.27933],[49.02219,21.27873],[49.02209,21.27849],[49.02192,21.27807],[49.02165,21.2774],[49.0216,21.27726],[49.02149,21.27732],[49.02142,21.27736],[49.02135,21.27738],[49.02112,21.27731],[49.02088,21.27722],[49.0207,21.27714],[49.02058,21.27708],[49.02038,21.27699],[49.02017,21.27693],[49.01962,21.27671],[49.01948,21.27666],[49.01912,21.27652],[49.01867,21.27635],[49.01842,21.27623],[49.01826,21.27612],[49.01811,21.27597],[49.01789,21.27565],[49.01785,21.27558],[49.01773,21.27534],[49.01736,21.27442],[49.01709,21.27373],[49.01682,21.27305],[49.01623,21.27156],[49.01512,21.27129],[49.01477,21.27119],[49.01363,21.27091],[49.01292,21.27067],[49.01235,21.2705],[49.01179,21.27045],[49.01178,21.2695],[49.01177,21.26848],[49.01166,21.26764],[49.01164,21.26747],[49.01163,21.26734],[49.01164,21.2672],[49.01167,21.26707],[49.01175,21.26674],[49.01173,21.26654],[49.01161,21.26631],[49.0114,21.26623],[49.01026,21.26591],[49.00929,21.2656],[49.00832,21.26529],[49.00785,21.26516],[49.00755,21.2651],[49.00682,21.26508],[49.00664,21.2651],[49.00597,21.26527],[49.00557,21.26546],[49.00516,21.26572],[49.00435,21.26629],[49.00293,21.26736],[49.00195,21.26812],[49.00098,21.26883],[49.00017,21.2694],[48.99966,21.26965],[48.99884,21.26987],[48.99809,21.26988],[48.99726,21.26978],[48.99679,21.26963],[48.99642,21.26941],[48.99602,21.26921],[48.99543,21.26884],[48.99496,21.26846],[48.99454,21.26812],[48.99428,21.26785],[48.99392,21.26741],[48.99369,21.26738],[48.99276,21.26667],[48.99247,21.26646],[48.99206,21.26622],[48.99154,21.26596],[48.99117,21.26567],[48.99105,21.26555],[48.991,21.26537],[48.99099,21.26516],[48.99114,21.26415],[48.9913,21.26312],[48.99135,21.26259],[48.99133,21.26228],[48.99146,21.26048],[48.99146,21.25833],[48.99135,21.25671],[48.99111,21.2549],[48.99084,21.25338],[48.99006,21.25014],[48.98949,21.24902],[48.98863,21.24806],[48.98855,21.24764],[48.98958,21.24692],[48.98976,21.24682],[48.9904,21.24637],[48.99067,21.24713],[48.99092,21.24778],[48.99118,21.24848],[48.9918,21.24807],[48.99207,21.24789],[48.99256,21.24757],[48.99276,21.24743],[48.9924,21.24616]]]},"stops":[{"name":"Podhradík","lat":49.00359,"lon":21.348841},{"name":"Podhradík","lat":49.00354,"lon":21.348709},{"name":"Nižný koniec","lat":49.005161,"lon":21.34495},{"name":"Nižný koniec","lat":49.005081,"lon":21.344931},{"name":"Vyšná Šebastová","lat":49.008499,"lon":21.33765},{"name":"Vyšná Šebastová","lat":49.008518,"lon":21.33749},{"name":"Športový areál","lat":49.010921,"lon":21.333799},{"name":"Športový areál","lat":49.010872,"lon":21.333719},{"name":"Pod Maglovcom","lat":49.011902,"lon":21.33193},{"name":"Pod Maglovcom","lat":49.011971,"lon":21.330999},{"name":"OcÚ Vyšná Šebastová","lat":49.01479,"lon":21.326111},{"name":"OcÚ Vyšná Šebastová","lat":49.014671,"lon":21.326281},{"name":"Rázc. V. Šebastová","lat":49.01683,"lon":21.320419},{"name":"Rázc. V. Šebastová","lat":49.016788,"lon":21.320391},{"name":"Kamence","lat":49.01749,"lon":21.316999},{"name":"Kamence","lat":49.017441,"lon":21.31707},{"name":"Briežky","lat":49.019581,"lon":21.313061},{"name":"Briežky","lat":49.019539,"lon":21.312889},{"name":"Herlianska","lat":49.019329,"lon":21.2934},{"name":"Herlianska","lat":49.019249,"lon":21.29348},{"name":"Gener. Ambruša","lat":49.021358,"lon":21.288111},{"name":"Gener. Ambruša","lat":49.02116,"lon":21.28825},{"name":"Nižná Šebastová","lat":49.024849,"lon":21.286579},{"name":"Nižná Šebastová","lat":49.024799,"lon":21.2862},{"name":"Pažica","lat":49.023659,"lon":21.28203},{"name":"Pažica","lat":49.022999,"lon":21.28089},{"name":"Šebastovská","lat":49.01963,"lon":21.276649},{"name":"Šebastovská","lat":49.02021,"lon":21.277},{"name":"Bardejovská","lat":49.017891,"lon":21.275539},{"name":"Domašská","lat":49.014938,"lon":21.271219},{"name":"Kalinčiakova","lat":49.012531,"lon":21.270519},{"name":"Kalinčiakova","lat":49.01173,"lon":21.27025},{"name":"Nižnianska","lat":49.011681,"lon":21.26745},{"name":"Nižnianska","lat":49.01162,"lon":21.267639},{"name":"Karpatská","lat":48.996159,"lon":21.26919},{"name":"Karpatská","lat":48.99725,"lon":21.26997},{"name":"Jurkovičova","lat":48.9939,"lon":21.26737},{"name":"Jurkovičova","lat":48.994389,"lon":21.26829},{"name":"Rusínska","lat":48.99136,"lon":21.26272},{"name":"Rusínska","lat":48.991379,"lon":21.260719},{"name":"HOBBY PARK","lat":48.991341,"lon":21.25606},{"name":"Čierny most","lat":48.9897,"lon":21.246929},{"name":"Čierny most","lat":48.98983,"lon":21.24662},{"name":"Kpt. Nálepku","lat":48.992611,"lon":21.246861},{"name":"Veľká pošta","lat":48.991531,"lon":21.24534},{"name":"Ľubotice","lat":49.011711,"lon":21.273569},{"name":"Šalgovická","lat":49.012039,"lon":21.279449},{"name":"Korabinského","lat":49.01313,"lon":21.28083},{"name":"Jána Kostru","lat":49.013451,"lon":21.27672},{"name":"Strážnická","lat":49.01762,"lon":21.277411},{"name":"Gbolovky","lat":49.020241,"lon":21.32242},{"name":"Kapanoš","lat":49.02301,"lon":21.328501},{"name":"Severná - kostol","lat":49.02483,"lon":21.333019},{"name":"Severná","lat":49.024181,"lon":21.33679}]};
+const LINES=['1','13','21','28','37','N2'];
+let LN=(()=>{const h=location.hash.replace('#','');if(LINES.includes(h))return h;try{const v=localStorage.getItem('mhdLine');if(LINES.includes(v))return v}catch(e){}return '13'})();
+let DEST={1:'Čierny most',0:'Podhradík'};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const map=L.map('map').setView([49.005,21.28],13);
+const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+const routeL=L.featureGroup().addTo(map), stopL=L.featureGroup().addTo(map), live=L.layerGroup().addTo(map), arrL=L.layerGroup();
+arrL.addTo(map);
+let LINE=FALLBACK;
+
+function stopDirs(s,d){if(s.dirs&&s.dirs.length)return s.dirs;
+ const dd=[0,1].map(k=>{let b=1e18;(d.shapes[k]||[]).forEach(l=>l.forEach(q=>{const v=(q[0]-s.lat)**2+((q[1]-s.lon)*kx)**2;if(v<b)b=v}));return b});
+ return Math.abs(dd[0]-dd[1])<1e-9?[0,1]:[dd[0]<dd[1]?0:1]}
+function drawLine(d){LINE=d;routeL.clearLayers();stopL.clearLayers();arrL.clearLayers();
+ [0,1].forEach(dir=>(d.shapes[dir]||[]).forEach(s=>{const pl=L.polyline(s,{color:css(dir?'--d1':'--d0'),weight:4,opacity:.85}).addTo(routeL);pl._orig=s}));
+ // šípky smeru jazdy: v strede úseku medzi susednými zastávkami daného smeru
+ [0,1].forEach(dir=>{const l=(d.shapes[dir]||[])[0];if(!l)return;const c=cum(l),tot=c[c.length-1];
+  const pr=(la,lo)=>{let b=1e18,r=0;for(let i=1;i<l.length;i++){const ax=l[i-1][1]*kx,ay=l[i-1][0],dx=l[i][1]*kx-ax,dy=l[i][0]-ay,px=lo*kx,py=la;
+   const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/((dx*dx+dy*dy)||1e-12)));const v=(px-ax-dx*t)**2+(py-ay-dy*t)**2;if(v<b){b=v;r=c[i-1]+t*(c[i]-c[i-1])}}
+   return Math.sqrt(b)*MY<60?r:null};
+  const ss=[0,tot];d.stops.forEach(st=>{if(stopDirs(st,d).includes(dir)){const v=pr(st.lat,st.lon);if(v!=null)ss.push(v)}});
+  ss.sort((a,b)=>a-b);
+  for(let i=1;i<ss.length;i++){if(ss[i]-ss[i-1]<120)continue;const q=posAt(l,(ss[i]+ss[i-1])/2+Math.min(30,(ss[i]-ss[i-1])/6));
+   L.marker(q.p,{interactive:false,icon:L.divIcon({className:'',iconSize:[0,0],iconAnchor:[0,0],
+    html:'<div class="arr" style="transform:rotate('+q.brg.toFixed(0)+'deg) translateX(var(--off,3px))"><svg viewBox="0 0 16 16" style="color:'+css(dir?'--d1':'--d0')+'"><path d="M8 1.5 L14 14.5 L8 11 L2 14.5 Z" fill="currentColor"/></svg></div>'})}).addTo(arrL)}});
+ const seen=new Set(),named=new Set();
+ d.stops.forEach(s=>{const k=s.name+s.lat.toFixed(4)+s.lon.toFixed(4);if(seen.has(k))return;seen.add(k);
+  const ds=stopDirs(s,d);const col=ds.length>1?'#5f6b66':css(ds[0]?'--d1':'--d0');
+  let snap=null;if(ds.length===1)(d.shapes[ds[0]]||[]).forEach(l=>{const c=snapTo(l,s.lat,s.lon);if(c&&(!snap||c.dist<snap.dist))snap=c});
+  const m=L.circleMarker([s.lat,s.lon],{radius:6,color:col,weight:3,fillColor:'#fff',fillOpacity:1}).on('click',e=>{selM=e.target;const q=e.target.getLatLng();selStop(q.lat,q.lng);openStop(s.name,s.id||null,ds.length===1?ds[0]:null)}).addTo(stopL);m._snap=snap;m._ll=[s.lat,s.lon];
+  if(!named.has(s.name)){named.add(s.name);m.bindTooltip(s.name,{permanent:true,direction:'top',offset:[0,-6],className:'stl'})}
+  else m.bindTooltip(s.name,{direction:'top',offset:[0,-6]})});
+ map.fitBounds(routeL.getBounds(),{padding:[20,20]});labels();}
+function labels(){const z=map.getZoom(),c=document.getElementById('map').classList;c.toggle('nolbl',z<14);c.toggle('noarr',z<13);c.toggle('arrS',z===13);c.toggle('arrM',z===14);restyle(z)}
+// posun trasy na pravú stranu v smere jazdy (o px pixelov), aby sa smery neprekrývali
+function snapTo(l,la,lo){let b=1e18,best=null,bR=1e18,bestR=null;for(let i=1;i<l.length;i++){const ax=l[i-1][1]*kx,ay=l[i-1][0],dx=l[i][1]*kx-ax,dy=l[i][0]-ay,px=lo*kx,py=la;
+ const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/((dx*dx+dy*dy)||1e-12)));const qx=ax+dx*t,qy=ay+dy*t,v=(px-qx)**2+(py-qy)**2,c={p:[qy,qx/kx],a:l[i-1],b:l[i]};
+ if(v<b){b=v;best=c}if(dx*(py-qy)-dy*(px-qx)<=0&&v<bR){bR=v;bestR=c}}
+ if(!best||Math.sqrt(b)*MY>=60)return null;const r=bestR&&Math.sqrt(bR)*MY<Math.sqrt(b)*MY+20?bestR:best;r.dist=r===bestR?Math.sqrt(bR)*MY:Math.sqrt(b)*MY;return r}
+function offsetLL(ll,px){const P=ll.map(q=>map.latLngToLayerPoint(q)),n=P.length,out=[];
+ for(let i=0;i<n;i++){const a=P[Math.max(0,i-1)],b=P[Math.min(n-1,i+1)];let dx=b.x-a.x,dy=b.y-a.y;const L0=Math.hypot(dx,dy)||1;dx/=L0;dy/=L0;
+  out.push(map.layerPointToLatLng(L.point(P[i].x-dy*px,P[i].y+dx*px)))}return out}
+function restyle(z){const off=z>=16?4:z>=14?3.5:z>=13?2.5:1.5;document.getElementById('map').style.setProperty('--off',off+'px');
+ routeL.eachLayer(pl=>{if(pl._orig)pl.setLatLngs(offsetLL(pl._orig,off))});
+ const r=z>=17?8:z>=16?7:z>=15?6:z>=14?5:z>=13?4:3,w=z>=14?3:2;stopL.eachLayer(m=>{if(!m.setRadius)return;m.setRadius(r);m.setStyle({weight:w});
+  if(m._snap){const P=map.latLngToLayerPoint(m._snap.p),A=map.latLngToLayerPoint(m._snap.a),B=map.latLngToLayerPoint(m._snap.b);let dx=B.x-A.x,dy=B.y-A.y;const n=Math.hypot(dx,dy)||1;dx/=n;dy/=n;
+   const k=off+1.5+r+w/2;m.setLatLng(map.layerPointToLatLng(L.point(P.x-dy*k,P.y+dx*k)))}});
+ if(selM&&stopL.hasLayer(selM)){const q=selM.getLatLng();selPos=[q.lat,q.lng]}if(selPos)selStop(selPos[0],selPos[1])}
+map.on('zoomend',labels);
+fetch('api/version').then(r=>r.json()).then(d=>{if(d.version)document.getElementById('ver').textContent='v'+d.version}).catch(()=>{});
+const headT=h=>String(h||'').toLowerCase().replace(/(^|[\s\-–(/.])(\p{L})/gu,(m,a,c)=>a+c.toUpperCase()).replace(/(^|[\s(\-–/])([IVX][ivx]*)(?=$|[\s),.\-–/])/g,(m,a,r)=>a+r.toUpperCase());
+let lineReq=0;
+function switchLine(ln){LN=ln;const my=++lineReq;try{localStorage.setItem('mhdLine',ln)}catch(e){}history.replaceState(null,'','#'+ln);
+ document.querySelectorAll('#lineSel button').forEach(b=>{const on=b.dataset.l===ln;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
+ document.getElementById('lnBadge').textContent=ln;document.getElementById('lnTxt').textContent=ln;
+ for(const k in ST){delete ST[k]}live.clearLayers();document.getElementById('liveList').innerHTML='';document.getElementById('liveSt').textContent='Živé GPS: načítavam…';
+ curStop=null;selM=null;selStop(null);clearInterval(depTimer);document.getElementById('dep').innerHTML='<h2>Odchody</h2><p class="mut" style="margin:4px 0 0">Klikni na zastávku linky '+ln+' (krúžok – farba podľa smeru) v mape.</p>';
+ DEST=ln==='13'?{1:'Čierny most',0:'Podhradík'}:{1:'…',0:'…'};setDest();
+ if(ln==='13')drawLine(FALLBACK);else{routeL.clearLayers();stopL.clearLayers();arrL.clearLayers();LINE={shapes:{},stops:[]}}
+ document.getElementById('gtfsInfo').textContent='načítavam trasu…';
+ fetch('api/line/'+ln).then(r=>r.ok?r.json():Promise.reject()).then(d=>{if(my!==lineReq)return;if(d.shapes&&d.stops&&d.stops.length){if(d.dest&&ln!=='13')DEST={0:headT(d.dest[0])||'smer 0',1:headT(d.dest[1])||'smer 1'};setDest();drawLine(d);document.getElementById('gtfsInfo').textContent='trasa a CP z aktuálneho GTFS'}else document.getElementById('gtfsInfo').textContent='trasa linky '+ln+' nie je v GTFS'}).catch(()=>{if(my===lineReq)document.getElementById('gtfsInfo').textContent=ln==='13'?'trasa z uloženej kópie GTFS':'trasu sa nepodarilo načítať'});
+ poll()}
+function setDest(){document.getElementById('dest1').textContent=DEST[1];document.getElementById('dest0').textContent=DEST[0]}
+document.getElementById('lineSel').innerHTML=LINES.map(l=>'<button data-l="'+l+'" role="tab">'+l+'</button>').join('');
+document.getElementById('lineSel').onclick=e=>{const b=e.target.closest('button');if(b&&b.dataset.l!==LN)switchLine(b.dataset.l)};
+document.getElementById('fitBtn').onclick=()=>map.fitBounds(routeL.getBounds(),{padding:[20,20]});
+
+const ob=document.getElementById('osmBtn');
+ob.onclick=()=>{const on=map.hasLayer(osm);on?map.removeLayer(osm):osm.addTo(map);
+ ob.classList.toggle('on',!on);ob.setAttribute('aria-pressed',String(!on));ob.textContent='🗺️ OpenStreetMap: '+(!on?'zapnutá':'vypnutá');
+ try{localStorage.setItem('mhdOsm',on?'0':'1')}catch(e){}};
+try{if(localStorage.getItem('mhdOsm')==='0')ob.click()}catch(e){}
+
+// prichytenie na trasu daného smeru + smer jazdy (azimut úseku)
+const kx=Math.cos(49*Math.PI/180);
+function snap(lat,lng,dir){const sets=(LINE.shapes[dir]&&LINE.shapes[dir].length)?LINE.shapes[dir]:[].concat(...Object.values(LINE.shapes));
+ let best=null,bd=1e18,brg=0;
+ for(const l of sets)for(let i=1;i<l.length;i++){const ax=l[i-1][1]*kx,ay=l[i-1][0],bx=l[i][1]*kx,by=l[i][0],px=lng*kx,py=lat;
+  const dx=bx-ax,dy=by-ay,t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/((dx*dx+dy*dy)||1e-12)));
+  const qx=ax+dx*t,qy=ay+dy*t,d=(px-qx)**2+(py-qy)**2;if(d<bd){bd=d;best=[qy,qx/kx];brg=Math.atan2(dx,dy)*180/Math.PI}}
+ return{p:best||[lat,lng],brg}}
+const pinSvg=(deg,num)=>'<div class="pin"><svg viewBox="0 0 44 44" style="transform:rotate('+deg.toFixed(0)+'deg)"><path d="M22 3 L31.3 14.45 A12 12 0 1 1 12.7 14.45 Z" fill="currentColor" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><circle cx="22" cy="22" r="9.5" fill="#fff"/></svg><b>'+num+'</b></div>';
+
+// poloha na trase: index čiary + vzdialenosť po trase (m), aby sa dal odhadnúť pohyb
+const MY=111320,MX=MY*kx;
+function cum(l){if(!l._c){l._c=[0];for(let i=1;i<l.length;i++)l._c.push(l._c[i-1]+Math.hypot((l[i][0]-l[i-1][0])*MY,(l[i][1]-l[i-1][1])*MX))}return l._c}
+function along(lat,lng,dir){const sets=(LINE.shapes[dir]&&LINE.shapes[dir].length)?LINE.shapes[dir]:[].concat(...Object.values(LINE.shapes));
+ let r=null,bd=1e18;
+ for(const l of sets){const c=cum(l);for(let i=1;i<l.length;i++){const ax=l[i-1][1]*kx,ay=l[i-1][0],bx=l[i][1]*kx,by=l[i][0],px=lng*kx,py=lat;
+  const dx=bx-ax,dy=by-ay,t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/((dx*dx+dy*dy)||1e-12)));
+  const d=(px-ax-dx*t)**2+(py-ay-dy*t)**2;if(d<bd){bd=d;r={l,s:c[i-1]+t*(c[i]-c[i-1])}}}}
+ return r}
+function posAt(l,s){const c=cum(l);s=Math.max(0,Math.min(c[c.length-1],s));let i=1;while(i<c.length-1&&c[i]<s)i++;
+ const t=(s-c[i-1])/((c[i]-c[i-1])||1),a=l[i-1],b=l[i];
+ return{p:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],brg:Math.atan2((b[1]-a[1])*kx,b[0]-a[0])*180/Math.PI}}
+
+const ST={};           // stav každého vozidla
+const EST_MAX=120;     // odhad pohybu najviac 2 min, potom ostane stáť
+function setLive(all){const now=Date.now(),got={};
+ for(const b of all||[]){const k=b.vehicle;got[k]=1;const fixT=now-(+b.ageS||0)*1000;const dir=+b.direction;const o=ST[k];
+  if(o&&Math.abs(o.fixT-fixT)<1500&&o.dir===dir){o.b=b;continue}           // stále tá istá GPS správa
+  const a=along(+b.lat,+b.lng,dir);const n={b,dir,fixT,a,v:0,m:o&&o.m};
+  if(o&&a&&o.a&&o.a.l===a.l&&o.dir===dir){const dt=(fixT-o.fixT)/1000,ds=a.s-o.a.s;
+   if(dt>2&&ds>=-20){const v=Math.max(0,Math.min(20,ds/dt));n.v=o.v?0.6*v+0.4*o.v:v}else n.v=o.v}
+  ST[k]=n}
+ for(const k in ST)if(!got[k]){if(ST[k].m)live.removeLayer(ST[k].m);delete ST[k]}
+ render()}
+function render(){const now=Date.now(),rows=[];
+ const list=Object.values(ST).sort((x,y)=>y.dir-x.dir);
+ for(const o of list){const b=o.b,dir=o.dir;const age=(now-o.fixT)/1000;const est=age>20;
+  let pos;if(o.a){const ext=est?o.v*Math.min(age,EST_MAX):0;pos=posAt(o.a.l,o.a.s+ext)}else pos=snap(+b.lat,+b.lng,dir);
+  const sec=-(+b.delay||0);const late=sec>30;const as=Math.abs(sec);const lateM=(late?'−':'+')+Math.floor(as/60)+':'+String(as%60).padStart(2,'0');const lateS=(late?'−':'+')+as+' s';
+  const dest=DEST[dir]||('smer '+dir);const ll=(+b.lat).toFixed(5)+', '+(+b.lng).toFixed(5);
+  const ageTxt=age<90?Math.round(age)+' s':Math.floor(age/60)+' min '+Math.round(age%60)+' s';
+  const note=est?(o.v>0.5&&age<EST_MAX?'odhad polohy':'posledná známa poloha')+' – GPS pred '+ageTxt:'';
+  const html='<div class="bus'+(est?' est':'')+'"><div class="c'+dir+(late?' late':'')+'">'+pinSvg(pos.brg,b.number||LN)+'</div><span class="dly lbl2 '+(late?'dly-late':'dly-ok')+'">'+lateM+'</span></div>';
+  const tip='<b>Linka '+(b.number||LN)+' · vozidlo '+b.vehicle+'</b><br>smer: '+dest+'<br>pri zastávke: '+b.station+'<br>meškanie: '+lateM+' ('+lateS+')<br><span class="num">'+ll+'</span>'+(note?'<br><i>'+note+'</i>':'');
+  if(!o.m){o.m=L.marker(pos.p,{icon:L.divIcon({className:'',html,iconSize:[0,0],iconAnchor:[0,0]}),zIndexOffset:1000}).bindTooltip(tip,{direction:'top',offset:[0,-20]}).addTo(live);o.h=html}
+  else{o.m.setLatLng(pos.p);if(o.h!==html){o.m.setIcon(L.divIcon({className:'',html,iconSize:[0,0],iconAnchor:[0,0]}));o.h=html}o.m.setTooltipContent(tip)}
+  rows.push('<li><span class="num" style="width:44px">#'+b.vehicle+'</span><span><b>→ '+dest+'</b> · pri '+b.station+' · <span class="dly '+(late?'dly-late':'dly-ok')+'">'+lateM+'</span>'+(note?' · <i>'+note+'</i>':'')+'<br><small class="num">lat '+(+b.lat).toFixed(5)+' · lon '+(+b.lng).toFixed(5)+' · delay '+lateS+'</small></span></li>')}
+ document.getElementById('liveSt').innerHTML='Živé GPS · linka '+LN+' · '+list.length+' autobusov <small>(aktualizované '+new Date().toLocaleTimeString('sk-SK')+')</small>';
+ document.getElementById('liveList').innerHTML=rows.join('')||'<li><span>Linka '+LN+' teraz nejazdí.</span></li>'}
+let pollN=0;
+async function poll(){const ln=LN;
+ if(++pollN%6===0&&LINE&&LINE.flipped!=null)fetch('api/line/'+ln).then(r=>r.json()).then(d=>{if(ln===LN&&d.shapes&&d.flipped!==LINE.flipped){if(d.dest&&ln!=='13'){DEST={0:headT(d.dest[0])||'smer 0',1:headT(d.dest[1])||'smer 1'};setDest()}drawLine(d);for(const k in ST){if(ST[k].m)live.removeLayer(ST[k].m);delete ST[k]}}}).catch(()=>{});
+ try{const r=await fetch('api/bus/'+ln);if(!r.ok)throw 0;const d=await r.json();if(ln!==LN)return;setLive(d)}catch(e){document.getElementById('liveSt').textContent='Živé GPS nedostupné – zobrazujem posledné známe polohy.';render()}}
+setInterval(poll,10000);setInterval(render,2000);
+
+// odchody zo zastávky
+const headN=h=>String(h||'').toLowerCase().replace(/(^|[\s\-–(/])(\p{L})/gu,(m,a,c)=>a+c.toUpperCase()).replace(/-/g,' – ').replace(/\b(Dp|Ii|Iii|Iv|Vi|Vii|Viii|Ix)\b/g,m=>m.toUpperCase());
+const inTxt=m=>m<=0?'teraz':m<60?'o '+m+' min':'o '+Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' m';
+let curStop=null,curId=null,curDir=null,depTimer=null;
+const selL=L.layerGroup().addTo(map);
+let selPos=null,selM=null;
+function selStop(lat,lon){selL.clearLayers();selPos=lat==null?null:[lat,lon];if(lat==null)return;const z=map.getZoom(),r=(z>=17?8:z>=16?7:z>=15?6:z>=14?5:z>=13?4:3);L.circleMarker([lat,lon],{radius:r+6,color:'#ff8c00',weight:4,fill:false,interactive:false}).addTo(selL);L.circleMarker([lat,lon],{radius:r+10,color:'#ff8c00',weight:2,opacity:.45,fill:false,interactive:false}).addTo(selL)}
+const dirName=(dd,items)=>{const c={};items.filter(x=>x.line===LN&&x.dir===dd).forEach(x=>{const h=headN(x.head);c[h]=(c[h]||0)+1});const top=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];return top?top[0]:DEST[dd]};const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function loadDep(){if(!curStop)return;const box=document.getElementById('dep');
+ try{const r=await fetch('api/departures?name='+encodeURIComponent(curStop)+(curId?'&id='+encodeURIComponent(curId):''));const d=await r.json();if(!r.ok)throw new Error(d.error||'chyba');
+  const dd=curDir!=null?curDir:((d.items.find(x=>x.line===LN&&x.dir!=null)||{}).dir);const dirH=dd!=null?'<div class="dirh c'+dd+'h">➜ smer '+esc(dirName(dd,d.items))+'</div>':'';
+  box.innerHTML='<h2>'+esc(d.name)+'</h2>'+dirH+'<small>Najbližšie odchody podľa cestovného poriadku · '+new Date().toLocaleTimeString('sk-SK',{hour:'2-digit',minute:'2-digit'})+'</small>'+(d.approx?'<p style="margin:6px 0 0;padding:6px 8px;border-radius:6px;background:#fff3bf;color:#5c3c00;font-size:13px">Oficiálny GTFS platí len do 31.10.2026 – časy sú podľa rovnakého dňa v týždni ('+esc(d.approx)+'). Môžu sa líšiť od aktuálneho CP.</p>':'')+'<ol>'+
+   (d.items.map(x=>'<li class="dr"><span class="dep-t">'+x.time+'</span><span class="ln'+(x.line===LN?' l13'+(x.dir===0?' l13b':''):'')+'">'+esc(x.line)+'</span><span class="dep-h" title="'+esc(headN(x.head))+'">'+esc(headN(x.head))+'</span><span class="dep-in">'+inTxt(x.inMin)+'</span></li>').join('')||'<li><span class="mut">Dnes už odtiaľto nič nejde.</span></li>')+'</ol>';
+ }catch(e){box.innerHTML='<h2>'+esc(curStop)+'</h2><p class="mut">Odchody sa nepodarilo načítať ('+esc(e.message)+'). Server si cestovný poriadok sťahuje pri štarte – skús o chvíľu.</p>'}}
+function openStop(name,id,dir){curStop=name;curId=id||null;curDir=(dir===0||dir===1)?dir:null;clearInterval(depTimer);loadDep();depTimer=setInterval(loadDep,30000);
+ if(window.innerWidth<=900)document.getElementById('dep').scrollIntoView({behavior:'smooth'})}
+switchLine(LN);
+</script></body></html>
