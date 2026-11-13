@@ -61,14 +61,19 @@ li.dr .ln{min-width:0}
 .lines button.on{background:var(--d1);color:#fff}
 .dep-h{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #liveSt{font-weight:600;color:var(--acc)}
-.favs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;font-size:13px}
+.favrow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.favs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:13px}
+.acc{font-size:13px}.acc form{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.acc button{padding:5px 10px}.acc button.on{background:var(--d1);color:#fff;border-color:var(--d1)}
+.acc input{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--rule);background:var(--card);color:var(--ink);width:130px}
+.acc .err{flex-basis:100%;color:#e03131;min-height:0}
 .favs .favl{font-weight:700;color:#e0a800}
 .favs button{min-width:40px;padding:5px 8px;border-radius:8px;border:2px solid #e0a800;background:transparent;color:var(--ink);font:800 14px/1 system-ui,sans-serif;cursor:pointer}
 .favs button.on{background:#e0a800;color:#16211c}
 button.star{border:0;background:none;padding:0 4px;font-size:24px;line-height:1;color:#e0a800;cursor:pointer;vertical-align:-2px}
 </style></head><body><main>
 <div class="lines" id="lineSel" role="tablist" aria-label="Výber linky"></div>
-<div class="favs" id="favSel"></div>
+<div class="favrow"><div class="favs" id="favSel"></div><div class="acc" id="acc"></div></div>
 <h1><span class="badge" id="lnBadge">13</span>Všetky autobusy linky <span id="lnTxt">13</span><button id="favBtn" class="star" aria-pressed="false" title="Obl'ubene">&#9734;</button> <small id="ver" style="font-size:12px;font-weight:600;color:var(--mut)">v2.1.0</small></h1>
 <div class="legend" style="margin-bottom:10px"><span><i style="background:var(--d1)"></i>smer <span id="dest1">Čierny most</span></span><span><i style="background:var(--d0)"></i>smer <span id="dest0">Podhradík</span></span><span><b style="color:#e03131">−1:30</b> mešká (min:sek) · <b style="color:#2f9e44">+0:20</b> načas/v predstihu</span><span>špička krúžku = smer jazdy, v krúžku číslo linky · šípky v trase = smer jazdy · detaily: prejdi myšou / ťukni</span><span>Klikni na zastávku → odchody vpravo</span></div>
 <div class="wrap">
@@ -156,8 +161,22 @@ function setDest(){document.getElementById('dest1').textContent=DEST[1];document
 let FAV=[];try{FAV=JSON.parse(localStorage.getItem('mhdFav')||'[]').filter(x=>/^[A-Z0-9]{1,4}$/.test(x))}catch(e){}
 function renderFav(){document.getElementById('favSel').innerHTML='<span class="favl">★ Obľúbené:</span>'+(FAV.length?FAV.map(l=>'<button data-l="'+l+'"'+(l===LN?' class="on"':'')+'>'+l+'</button>').join(''):'<span class="mut">pridaj linku hviezdičkou ☆ pri názve linky</span>')}
 function updStar(){const b=document.getElementById('favBtn'),on=FAV.includes(LN);b.textContent=on?'★':'☆';b.setAttribute('aria-pressed',on);b.title=on?'Odobrať z obľúbených':'Pridať do obľúbených'}
-document.getElementById('favBtn').onclick=()=>{const i=FAV.indexOf(LN);if(i<0)FAV.push(LN);else FAV.splice(i,1);try{localStorage.setItem('mhdFav',JSON.stringify(FAV))}catch(e){}updStar();renderFav()};
+document.getElementById('favBtn').onclick=()=>{const i=FAV.indexOf(LN);if(i<0)FAV.push(LN);else FAV.splice(i,1);saveFav();updStar();renderFav()};
 document.getElementById('favSel').onclick=e=>{const b=e.target.closest('button');if(b&&b.dataset.l!==LN)switchLine(b.dataset.l)};
+// prihlasenie: oblubene sa ukladaju na server pod meno
+let TOK=null,USR=null,accOpen=false;try{TOK=localStorage.getItem('mhdTok');USR=localStorage.getItem('mhdUser')}catch(e){}
+const api=(p,m,b)=>fetch('api/'+p,{method:m||'GET',headers:Object.assign({'Content-Type':'application/json'},TOK?{Authorization:'Bearer '+TOK}:{}),body:b?JSON.stringify(b):undefined}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(d.error||('chyba '+r.status));e.s=r.status;throw e}return d});
+function saveFav(){try{localStorage.setItem('mhdFav',JSON.stringify(FAV))}catch(e){}if(TOK)api('fav','PUT',{fav:FAV}).catch(e=>{if(e.s===401)dropSess()})}
+function setSess(d){if(d.token)TOK=d.token;USR=d.user;try{localStorage.setItem('mhdTok',TOK);localStorage.setItem('mhdUser',USR)}catch(e){}const add=FAV.filter(x=>!d.fav.includes(x));FAV=d.fav.concat(add);try{localStorage.setItem('mhdFav',JSON.stringify(FAV))}catch(e){}if(add.length)saveFav();updStar();renderFav();renderAcc()}
+function dropSess(){TOK=USR=null;try{localStorage.removeItem('mhdTok');localStorage.removeItem('mhdUser')}catch(e){}renderAcc()}
+function renderAcc(){const el=document.getElementById('acc');
+ if(USR){el.innerHTML='<span class="mut"><b>'+String(USR).replace(/[<>&"]/g,'')+'</b></span> <button id="accOut">Odhlásiť</button>';document.getElementById('accOut').onclick=()=>{if(TOK)api('auth/logout','POST',{}).catch(()=>{});dropSess()};return}
+ if(!accOpen){el.innerHTML='<span class="mut">ulož si oblúbené pod meno</span> <button id="accIn">Prihlásiť / registrovať</button>';document.getElementById('accIn').onclick=()=>{accOpen=true;renderAcc();document.getElementById('accU').focus()};return}
+ el.innerHTML='<form id="accF" autocomplete="on"><input id="accU" name="username" placeholder="meno" autocomplete="username" required minlength="3" maxlength="32"> <input id="accP" name="password" type="password" placeholder="heslo (min. 6)" autocomplete="current-password" required minlength="6" maxlength="100"> <button type="submit" class="on">Prihlásiť</button> <button type="button" id="accR">Registrovať</button> <button type="button" id="accX" title="Zavrieť">✕</button><div id="accE" class="err"></div></form>';
+ const go=reg=>{const e=document.getElementById('accE');e.textContent='…';api(reg?'auth/register':'auth/login','POST',{user:document.getElementById('accU').value.trim(),pass:document.getElementById('accP').value,fav:FAV}).then(d=>{accOpen=false;setSess(d)}).catch(x=>{e.textContent=x.message})};
+ document.getElementById('accF').onsubmit=ev=>{ev.preventDefault();go(false)};
+ document.getElementById('accR').onclick=()=>{if(document.getElementById('accF').reportValidity())go(true)};
+ document.getElementById('accX').onclick=()=>{accOpen=false;renderAcc()}}
 function renderSel(){document.getElementById('lineSel').innerHTML=LINES.map(l=>'<button data-l="'+l+'" role="tab"'+(l===LN?' class="on" aria-selected="true"':'')+'>'+l+'</button>').join('')}renderSel();
 fetch('api/lines').then(r=>r.json()).then(a=>{if(Array.isArray(a)&&a.length){LINES=a;if(!LINES.includes(LN))LINES.push(LN);renderSel()}}).catch(()=>{});
 document.getElementById('lineSel').onclick=e=>{const b=e.target.closest('button');if(b&&b.dataset.l!==LN)switchLine(b.dataset.l)};
@@ -241,4 +260,5 @@ async function loadDep(){if(!curStop)return;const box=document.getElementById('d
 function openStop(name,id,dir){curStop=name;curId=id||null;curDir=(dir===0||dir===1)?dir:null;clearInterval(depTimer);loadDep();depTimer=setInterval(loadDep,30000);
  if(window.innerWidth<=900)document.getElementById('dep').scrollIntoView({behavior:'smooth'})}
 switchLine(LN);
+renderAcc();if(TOK)api('fav').then(setSess).catch(e=>{if(e.s===401)dropSess()});
 </script></body></html>
