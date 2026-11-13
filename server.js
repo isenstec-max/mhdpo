@@ -193,6 +193,52 @@ function departures(name, limit = 14, stopId = '') {
   return { name, stopId: stopId || null, now: s, approx, items: list.slice(0, limit) };
 }
 
+// ---------- ucty (meno + heslo) a oblubene linky ----------
+// ulozene v DATA_DIR/users.json (v Dockeri treba volume na /app/data), hesla ako scrypt hash so solou
+const crypto = require('crypto');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+let USERS = {}; try { USERS = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch {}
+console.log('ucty:', Object.keys(USERS).length, 'v', USERS_FILE);
+function saveUsers() { try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(USERS_FILE + '.tmp', JSON.stringify(USERS)); fs.renameSync(USERS_FILE + '.tmp', USERS_FILE); } catch (e) { console.log('ucty: zapis zlyhal', e.message); } }
+const sha = s => crypto.createHash('sha256').update(s).digest('hex');
+const scrypt = (p, s) => new Promise((ok, ko) => crypto.scrypt(p, s, 64, (e, k) => e ? ko(e) : ok(k)));
+const fails = {};
+function readBody(req) { return new Promise(ok => { let b = ''; req.on('data', c => { b += c; if (b.length > 10000) { b = ''; req.destroy(); } }); req.on('end', () => { try { ok(JSON.parse(b || '{}')); } catch { ok({}); } }); }); }
+const bearer = req => (/^Bearer ([a-f0-9]{64})$/.exec(req.headers.authorization || '') || [])[1];
+function userOf(req) { const t = bearer(req); if (!t) return null; const h = sha(t); for (const n in USERS) if ((USERS[n].tokens || []).some(x => x.h === h)) return n; return null; }
+const cleanFav = a => Array.isArray(a) ? [...new Set(a.filter(x => typeof x === 'string' && /^[A-Z0-9]{1,4}$/.test(x)))].slice(0, 60) : [];
+function newToken(n) { const t = crypto.randomBytes(32).toString('hex'); USERS[n].tokens = [...(USERS[n].tokens || []), { h: sha(t), at: Date.now() }].slice(-10); return t; }
+async function auth(req, res, u) {
+  try {
+    const ip = req.socket.remoteAddress || '';
+    if (u.pathname === '/api/fav') {
+      const n = userOf(req); if (!n) return json(res, { error: 'Nie si prihlásený' }, 401);
+      if (req.method === 'PUT') { USERS[n].fav = cleanFav((await readBody(req)).fav); saveUsers(); }
+      return json(res, { user: USERS[n].name, fav: USERS[n].fav || [] });
+    }
+    if (req.method !== 'POST') return json(res, { error: 'POST' }, 405);
+    if (u.pathname === '/api/auth/logout') { const n = userOf(req), t = bearer(req); if (n) { const h = sha(t); USERS[n].tokens = USERS[n].tokens.filter(x => x.h !== h); saveUsers(); } return json(res, { ok: true }); }
+    const b = await readBody(req), name = String(b.user || '').trim(), pass = String(b.pass || ''), key = name.toLowerCase();
+    if (!/^[A-Za-z0-9._-]{3,32}$/.test(name)) return json(res, { error: 'Meno: 3 až 32 znakov (písmená bez diakritiky, čísla, . _ -)' }, 400);
+    if (pass.length < 6 || pass.length > 100) return json(res, { error: 'Heslo musí mať aspoň 6 znakov' }, 400);
+    const f = fails[ip], recent = f && Date.now() - f.at < 10 * 60 * 1000;
+    if (recent && f.n >= 10) return json(res, { error: 'Veľa neúspešných pokusov, skús o 10 minút' }, 429);
+    if (u.pathname === '/api/auth/register') {
+      if (USERS[key]) return json(res, { error: 'Toto meno už existuje' }, 409);
+      if (Object.keys(USERS).length >= 5000) return json(res, { error: 'Registrácia je plná' }, 503);
+      const salt = crypto.randomBytes(16).toString('hex');
+      USERS[key] = { name, salt, hash: (await scrypt(pass, salt)).toString('hex'), fav: cleanFav(b.fav), created: new Date().toISOString() };
+    } else if (u.pathname === '/api/auth/login') {
+      const x = USERS[key], k = await scrypt(pass, x ? x.salt : 'x');
+      if (!x || !crypto.timingSafeEqual(Buffer.from(x.hash, 'hex'), k)) { fails[ip] = { n: (recent ? f.n : 0) + 1, at: Date.now() }; return json(res, { error: 'Nesprávne meno alebo heslo' }, 401); }
+      delete fails[ip];
+    } else return json(res, { error: 'not found' }, 404);
+    const token = newToken(key); saveUsers();
+    return json(res, { token, user: USERS[key].name, fav: USERS[key].fav || [] });
+  } catch (e) { console.log('auth chyba', e.message); return json(res, { error: 'Chyba servera' }, 500); }
+}
+
 // ---------- HTTP ----------
 const json = (res, o, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(o)); };
 const SSL_CERT = process.env.SSL_CERT, SSL_KEY = process.env.SSL_KEY;
@@ -200,6 +246,7 @@ const useTLS = SSL_CERT && SSL_KEY && fs.existsSync(SSL_CERT) && fs.existsSync(S
 const handler = (req, res) => {
   const u = new URL(req.url, 'http://x');
   let m;
+  if (u.pathname === '/api/fav' || u.pathname.startsWith('/api/auth/')) return auth(req, res, u);
   if ((m = u.pathname.match(/^\/api\/bus\/(\w+)/))) {
     ensureWatch(m[1]);
     const out = [], now = Date.now();
